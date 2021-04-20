@@ -34,7 +34,7 @@ class Account:
 
 if __name__ == '__main__':
     bank_names = [barnum.create_nouns().title() + ' Bank' for _ in range(10)]
-    compromiseable_attributes = ['card', 'phone', 'location']
+    compromiseable_attributes = ['identification', 'phone', 'location']
 
     accounts = {}
     compromised_account_ids = set()
@@ -95,8 +95,8 @@ if __name__ == '__main__':
 
         transactions.append((
             transaction_id,
-            account.account_id,
-            business_account.account_id,
+            account.card[1][0],
+            business_account.card[1][0],
             timestamp,
             round(amount, 2)
         ))
@@ -104,9 +104,9 @@ if __name__ == '__main__':
     dirname = os.path.dirname(os.path.realpath(__file__))
     with open(dirname + '/accounts.csv', 'w') as f:
         print(
-            'id,'
-            'type,'
-            'bank,'
+            'account_id,'
+            'account_type,'
+            'bank_name,'
             'identification_id,'
             'name,'
             'birthday,'

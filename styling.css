@@ -1,0 +1,52 @@
+
+@NodeStyle {
+  size: 20
+  border-width: 5
+  border-color: #ffffff
+  shadow-color: #bab8bb
+  shadow-size: 6
+  font-size: 10
+}
+
+@NodeStyle HasProperty?(node, "id") {
+  label: AsText(Property(node, "id"))
+}
+
+@NodeStyle HasLabel?(node, "Account") {
+  image-url: "https://cdn.pixabay.com/photo/2019/08/11/18/59/icon-4399701_960_720.png"
+}
+
+@NodeStyle HasLabel?(node, "Transaction") {
+  image-url: "https://cdn.pixabay.com/photo/2018/08/26/16/23/atm-3632623_960_720.png"
+}
+
+@NodeStyle HasLabel?(node, "Identification") {
+  image-url: "https://cdn.pixabay.com/photo/2012/04/18/12/59/passport-36963_960_720.png"
+}
+
+@NodeStyle HasLabel?(node, "CreditCard") {
+  image-url: "https://cdn.pixabay.com/photo/2018/10/03/18/46/money-3722123_960_720.png"
+}
+
+@NodeStyle HasLabel?(node, "Location") {
+  image-url: "https://cdn.pixabay.com/photo/2015/09/20/16/49/location-948510_960_720.png"
+  label: Format(Property(node, "city"))
+}
+
+@NodeStyle HasLabel?(node, "PhoneNumber") {
+  image-url: "https://cdn.pixabay.com/photo/2017/01/31/14/36/blue-2024619_960_720.png"
+}
+
+@NodeStyle HasLabel?(node, "Bank") {
+  image-url: "https://cdn.pixabay.com/photo/2018/08/25/21/08/money-3630935_960_720.png"
+}
+
+@NodeStyle Greater?(Size(Labels(node)), 0) {
+  label: Format("{} {}", Format(":{}", Join(Labels(node), " :")), Property(node, "id"))
+}
+
+@EdgeStyle {
+  width: 3
+  label: Type(edge)
+  font-size: 10
+}
