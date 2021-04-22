@@ -3,7 +3,6 @@ import random
 import barnum
 from randomtimestamp import randomtimestamp
 # import time
-# from geopy.geocoders import Nominatim
 
 
 class Account:
@@ -16,17 +15,15 @@ class Account:
             ' '.join(barnum.create_name()),
             barnum.create_birthday(18, 80)
         ]
+
         zipcode, city, state = barnum.create_city_state_zip()
-        # location = geolocator.geocode({
-        #     'postalcode': zipcode,
-        #     'countryRegion': 'United States'
-        # })
         self.location = (
             zipcode,
             city,
             state,
-            0,  # location.longitude,
-            0,  # location.latitude
+            *geolocator[zipcode]
+            # 0,  # location.longitude,
+            # 0,  # location.latitude
         )
         self.card = barnum.create_cc_number()
         self.phone = barnum.create_phone()
@@ -35,17 +32,23 @@ class Account:
 if __name__ == '__main__':
     bank_names = [barnum.create_nouns().title() + ' Bank' for _ in range(10)]
     compromiseable_attributes = ['identification', 'phone', 'location']
+    with open('zip-codes.txt') as f:
+        lines = [line.split(',') for line in f]
+        locator = {
+            row[0][1:-1]: (float(row[1][1:-1]), float(row[2][1:-1]))
+            for row in lines
+            if row[1] and row[2]
+        }
 
     accounts = {}
     compromised_account_ids = set()
-    # geolocator = Nominatim(user_agent='fraud-detection-data-generator')
     for _ in range(10000):
         account_id = hex(random.getrandbits(64))[2:]
         try:
             account = Account(
                 account_id,
                 random.choice(bank_names),
-                # geolocator
+                locator
             )
         except Exception:
             continue
@@ -69,7 +72,7 @@ if __name__ == '__main__':
             account = Account(
                 account_id,
                 random.choice(bank_names),
-                # geolocator
+                locator
             )
         except Exception:
             continue
