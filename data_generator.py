@@ -1,29 +1,31 @@
 import os
 import random
 import barnum
-from randomtimestamp import randomtimestamp
-# import time
+import geopy
+from datetime import datetime
 
 
 class Account:
-    def __init__(self, account_id, bank_name, geolocator=None):
+    def __init__(self, account_id, bank_name, coordinates):
         self.account_id = account_id
         self.account_type = 'personal'
         self.bank_name = bank_name
         self.identification = [
-            random.randint(452358123, 973821648),
+            hex(random.getrandbits(64))[2:],
             ' '.join(barnum.create_name()),
-            barnum.create_birthday(18, 80)
+            float(barnum.create_birthday(18, 80))
         ]
 
         zipcode, city, state = barnum.create_city_state_zip()
+        longitude, latitude = coordinates[zipcode]
+        longitude += random.random() / 5 * 2 - 0.2
+        latitude += random.random() / 5 * 2 - 0.2
         self.location = (
             zipcode,
             city,
             state,
-            *geolocator[zipcode]
-            # 0,  # location.longitude,
-            # 0,  # location.latitude
+            longitude,
+            latitude
         )
         self.card = barnum.create_cc_number()
         self.phone = barnum.create_phone()
@@ -34,7 +36,7 @@ if __name__ == '__main__':
     compromiseable_attributes = ['identification', 'phone', 'location']
     with open('zip-codes.txt') as f:
         lines = [line.split(',') for line in f]
-        locator = {
+        coordinates = {
             row[0][1:-1]: (float(row[1][1:-1]), float(row[2][1:-1]))
             for row in lines
             if row[1] and row[2]
@@ -42,13 +44,13 @@ if __name__ == '__main__':
 
     accounts = {}
     compromised_account_ids = set()
-    for _ in range(10000):
+    for _ in range(1000):
         account_id = hex(random.getrandbits(64))[2:]
         try:
             account = Account(
                 account_id,
                 random.choice(bank_names),
-                locator
+                coordinates
             )
         except Exception:
             continue
@@ -68,11 +70,13 @@ if __name__ == '__main__':
     business_accounts = {}
     for _ in range(100):
         account_id = hex(random.getrandbits(64))[2:]
+        if account_id in accounts:
+            continue
         try:
             account = Account(
                 account_id,
                 random.choice(bank_names),
-                locator
+                coordinates
             )
         except Exception:
             continue
@@ -84,11 +88,18 @@ if __name__ == '__main__':
     accounts = list(accounts.values())
     business_accounts = list(business_accounts.values())
     transactions = []
-    for _ in range(10000):
-        account = random.choice(accounts)
-        business_account = random.choice(business_accounts)
+    while len(transactions) != 10000:
+        person = random.choice(accounts)
+        business = random.choice(business_accounts)
+        if (
+            geopy.distance.distance(
+                (person.longitude, person.latitude),
+                (business.longitude, business.latitude)).km < 400
+            or random.random() < 0.99
+        ):
+            continue
         transaction_id = hex(random.getrandbits(64))[2:]
-        timestamp = randomtimestamp(start_year=2020)
+        timestamp = random.uniform(datetime.now() - 2678400, datetime.now())
         if random.random() < 0.001:
             amount = random.gauss(10000, 3000)
         elif random.random() < 0.01:
@@ -98,8 +109,8 @@ if __name__ == '__main__':
 
         transactions.append((
             transaction_id,
-            account.card[1][0],
-            business_account.card[1][0],
+            person.card[1][0],
+            business.card[1][0],
             timestamp,
             round(amount, 2)
         ))
@@ -116,8 +127,8 @@ if __name__ == '__main__':
             'zipcode,'
             'city,'
             'state,'
-            'longitude,'
             'latitude,'
+            'longitude,'
             'card_type,'
             'card_number,'
             'phone',

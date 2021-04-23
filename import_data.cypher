@@ -32,8 +32,8 @@ SET location += {
   zipcode: row.zipcode,
   city: row.city,
   state: row.state,
-  longitude: row.longitude,
-  latitude: row.latitude
+  lng: tofloat(row.longitude),
+  lat: tofloat(row.latitude)
 }
 SET card += {
   number: row.card_number,
@@ -48,12 +48,16 @@ CREATE (account)-[:LOCATED_IN]->(location)
 CREATE (account)-[:HAS_CARD]->(card)
 CREATE (account)<-[:HAS_ACCOUNT]-(bank);
 
-LOAD CSV FROM '/transactions.csv' WITH HEADER as row
+LOAD CSV FROM '/transactions.csv' WITH HEADER AS row
 MATCH (card_from:CreditCard {id: row.from})
 MATCH (card_to:CreditCard {id: row.to})
+      <-[:HAS_CARD]-()
+      -[:LOCATED_IN]->(location)
 CREATE (transaction:Transaction {
   id: row.id,
   timestamp: row.timestamp,
-  amount: row.amount
+  amount: tofloat(row.amount),
+  lat: location.lat,
+  lng: location.lng
 })
 CREATE (card_from)-[:SENT]->(transaction)<-[:RECEIVED]-(card_to);
