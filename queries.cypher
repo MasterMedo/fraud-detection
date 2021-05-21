@@ -12,22 +12,31 @@ return shared
 order by relationships desc
 limit 1;
 
-match (:Account)-[:IDENTIFIES_WITH|:HAS_PHONE]->(shared)<-[]-(:Account)
-with distinct shared
-match (shared)<-[]-(:Account)-[]->(:CreditCard)-[]->(transaction:Transaction)
-set transaction.fraudulent = True;
+MATCH (:Account)-[:IDENTIFIES_WITH|:HAS_PHONE]->(shared)<-[]-(:Account)
+WITH DISTINCT shared
+MATCH (shared)<-[]-(:Account)-[]->(:CreditCard)-[]->(transaction:Transaction)
+SET transaction.fraudulent = True;
 
-match (account:Account {type: 'business'})
-return account
-limit 1;
+MATCH (person:CreditCard)-[:SENT]->(transaction:Transaction)<-[:RECEIVED]-(business:CreditCard)
+CALL distance_calculator.single(person, transaction, 'km') YIELD distance
+WITH distance, transaction, person, business
+WHERE
+  distance > 1000
+  AND transaction.amount > 100
+  AND transaction.fraudulent = true
+RETURN person, transaction
+LIMIT 1
 
-match (location:Location)<--(Account)-->(CreditCard)
-      -[:SENT]->(transaction:Transaction)
-call distance_calculator.single(location, transaction, 'km') yield distance
-with distance, transaction, location
-where
-  distance > 200
-  and transaction.amount > 100
-  and transaction.fraudulent = true
-return transaction, location
-limit 1
+MATCH (:Account {type: 'business'})-->(business:CreditCard)
+      -[r]->(transaction:Transaction)
+WITH business,
+     collect(transaction) AS transactions,
+     sum(CASE WHEN transaction.fraudulent THEN 1 ELSE 0 END) AS amount
+WHERE ALL(transaction IN transactions WHERE transaction.amount < 200)
+WITH business
+ORDER BY amount DESC
+LIMIT 1
+MATCH (business)-->(:Transaction {fraudulent: True})<-[:SENT]-(person)
+MATCH (business)-[received]->(btransaction:Transaction)
+MATCH (person)-[sent]->(ptransaction:Transaction)
+RETURN business, person, btransaction, ptransaction, sent, received
