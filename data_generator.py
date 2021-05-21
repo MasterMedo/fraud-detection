@@ -1,39 +1,93 @@
+"""Generates a dataset viable for fraud detection.
+
+Assumes all accounts are a part of a single bank.
+Creates B business accounts.
+Creates P personal accounts 5 to 10 years old.
+Creates T transactions 1 month old at most.
+
+Accounts
+    - id: str
+    - created: float
+    - identification: Identification
+    - location: Location
+    - phone number: Phone
+    - credit card: CreditCard
+
+Identification
+    - id: str
+    - name: str
+    - birthday: float
+
+Location
+    - id: str
+    - state: str
+    - city: str
+    - zipcode: str
+    - latitude: float
+    - longitude: float
+
+Phone
+    - id: str
+    - number: str
+
+Credit card
+    - id: str
+    - number: str
+    - type: str
+
+Transaction
+    - id: str
+    - amount: float
+    - latitude: float
+    - longitude: float
+    - created: float
+"""
 import os
 import random
 import barnum
-import geopy
-from datetime import datetime
+from collections import defaultdict
+from functools import partial
+
+B = 100
+P = 1000
+T = 10000
 
 
 class Account:
-    def __init__(self, account_id, bank_name, coordinates):
-        self.account_id = account_id
-        self.account_type = 'personal'
-        self.bank_name = bank_name
+    def __init__(self, type_, created, name, coordinates):
+        self.id = get_random_id()
+        self.type = type_
+        self.created = created
+        self.card = barnum.create_cc_number()
+        self.phone = barnum.create_phone()
         self.identification = [
-            hex(random.getrandbits(64))[2:],
-            ' '.join(barnum.create_name()),
-            float(barnum.create_birthday(18, 80))
+            get_random_id(),
+            name,
+            barnum.create_birthday(18, 80).toordinal()
         ]
 
         zipcode, city, state = barnum.create_city_state_zip()
         longitude, latitude = coordinates[zipcode]
-        longitude += random.random() / 5 * 2 - 0.2
-        latitude += random.random() / 5 * 2 - 0.2
-        self.location = (
+        self.location = [
             zipcode,
             city,
             state,
             longitude,
             latitude
-        )
-        self.card = barnum.create_cc_number()
-        self.phone = barnum.create_phone()
+        ]
 
 
+def get_random_id():
+    global all_ids
+    while (id_ := hex(random.getrandbits(64))[2:]) in all_ids:
+        pass
+
+    all_ids.add(id_)
+    return id_
+
+
+all_ids = set()
 if __name__ == '__main__':
-    bank_names = [barnum.create_nouns().title() + ' Bank' for _ in range(10)]
-    compromiseable_attributes = ['identification', 'phone', 'location']
     with open('zip-codes.txt') as f:
         lines = [line.split(',') for line in f]
         coordinates = {
@@ -42,85 +96,113 @@ if __name__ == '__main__':
             if row[1] and row[2]
         }
 
-    accounts = {}
-    compromised_account_ids = set()
-    for _ in range(1000):
-        account_id = hex(random.getrandbits(64))[2:]
+    date_bank_created = barnum.create_birthday(5, 10).toordinal()
+    business_accounts = []
+    grid = defaultdict(list)
+    # ########################## Business accounts ###########################
+    while len(business_accounts) < B:
         try:
             account = Account(
-                account_id,
-                random.choice(bank_names),
-                coordinates
+                type_='business',
+                created=date_bank_created,
+                name=barnum.create_company_name(),
+                coordinates=coordinates,
             )
-        except Exception:
+        except Exception:  # barnum has internal bugs
             continue
 
-        if compromised_account_ids and random.random() < 0.05:
-            attribute = random.choice(compromiseable_attributes)
-            compromised_id = random.choice(list(compromised_account_ids))
-            compromised_account = accounts[compromised_id]
-            compromised_attribute = getattr(compromised_account, attribute)
-            setattr(account, attribute, compromised_attribute)
-
-        if accounts and random.random() < 0.05:
-            compromised_account_ids.add(random.choice(list(accounts.keys())))
-
-        accounts[account_id] = account
-
-    business_accounts = {}
-    for _ in range(100):
-        account_id = hex(random.getrandbits(64))[2:]
-        if account_id in accounts:
-            continue
-        try:
-            account = Account(
-                account_id,
-                random.choice(bank_names),
-                coordinates
-            )
-        except Exception:
-            continue
-
-        account.account_type = 'business'
-        account.identification[1] = barnum.create_company_name()
-        business_accounts[account_id] = account
-
-    accounts = list(accounts.values())
-    business_accounts = list(business_accounts.values())
-    transactions = []
-    while len(transactions) != 10000:
-        person = random.choice(accounts)
-        business = random.choice(business_accounts)
-        if (
-            geopy.distance.distance(
-                (person.longitude, person.latitude),
-                (business.longitude, business.latitude)).km < 400
-            or random.random() < 0.99
-        ):
-            continue
-        transaction_id = hex(random.getrandbits(64))[2:]
-        timestamp = random.uniform(datetime.now() - 2678400, datetime.now())
-        if random.random() < 0.001:
-            amount = random.gauss(10000, 3000)
-        elif random.random() < 0.01:
-            amount = random.gauss(3000, 1000)
+        n = random.random()
+        if n < 0.03:
+            account.random_expense = partial(random.gauss, 10000, 3000)
+        elif n < 0.1:
+            account.random_expense = partial(random.gauss, 3000, 1000)
+        elif n < 0.4:
+            account.random_expense = partial(random.choice, [20, 30, 50, 100, 200, 500, 1000])
+            account.identification[1] += ' ATM'
         else:
-            amount = random.gauss(100, 30) * random.lognormvariate(0, 2)
+            account.random_expense = partial(random.gauss, 50, 30)
+            account.identification[1] += random.choice(['Shop', 'Bar', 'Food', 'Store'])
 
-        transactions.append((
-            transaction_id,
-            person.card[1][0],
-            business.card[1][0],
-            timestamp,
-            round(amount, 2)
-        ))
+        longitude, latitude = account.location[-2:]
+        grid[
+            int((longitude + 67) / 10),
+            int((latitude - 25) / 5),
+        ].append(len(business_accounts))
+        business_accounts.append(account)
+
+    current_time = date_bank_created
+    accounts = []
+    transactions = []
+    compromised_indexes = []
+    compromiseable_attributes = ['identification', 'phone', 'location']
+    while len(transactions) < T:
+        current_time += random.random() * date_bank_created / T
+        # ######################### Personal Accounts ########################
+        if len(accounts) < P and random.random() < 0.1:
+            try:
+                account = Account(
+                    type_='personal',
+                    created=current_time,
+                    name=' '.join(barnum.create_name()),
+                    coordinates=coordinates,
+                )
+            except Exception:  # barnum has internal bugs
+                continue
+
+            account.location = random.choice(business_accounts).location
+            d = 0.4  # geographical coordinates maximal offset
+            account.location[-1] += random.random()*d - d/2
+            account.location[-2] += random.random()*d - d/2
+
+            # modify created account with a compromised field
+            if compromised_indexes and random.random() < 0.05:
+                attribute = random.choice(compromiseable_attributes)
+                compromised_index = random.choice(compromised_indexes)
+                compromised_account = accounts[compromised_index]
+                compromised_attribute = getattr(compromised_account, attribute)
+                setattr(account, attribute, compromised_attribute)
+
+            # compromise an account
+            if accounts and random.random() < 0.05:
+                compromised_indexes.append(random.randint(0, len(accounts)-1))
+
+            accounts.append(account)
+
+        # ######################### Transactions ############################
+        if accounts and len(transactions) < T:
+            person = random.choice(accounts)
+            if random.random() < 0.995:
+                longitude, latitude = person.location[-2:]
+                longitude = int((longitude + 67) / 10)
+                latitude = int((latitude - 25) / 5)
+                if (longitude, latitude) not in grid:
+                    continue
+
+                business = business_accounts[random.choice(grid[
+                    longitude,
+                    latitude,
+                ])]
+            else:
+                business = random.choice(business_accounts)
+
+            transaction_id = get_random_id()
+            created = current_time
+            amount = abs(business.random_expense())
+
+            transactions.append((
+                transaction_id,
+                person.card[1][0],
+                business.card[1][0],
+                created,
+                round(amount, 2)
+            ))
 
     dirname = os.path.dirname(os.path.realpath(__file__))
     with open(dirname + '/accounts.csv', 'w') as f:
         print(
             'account_id,'
             'account_type,'
-            'bank_name,'
+            'created,'
             'identification_id,'
             'name,'
             'birthday,'
@@ -137,9 +219,9 @@ if __name__ == '__main__':
         for account in accounts + business_accounts:
             print(
                 ','.join(map(str, [
-                    account.account_id,
-                    account.account_type,
-                    account.bank_name,
+                    account.id,
+                    account.type,
+                    account.created,
                     *account.identification,
                     *account.location,
                     account.card[0],
@@ -154,7 +236,7 @@ if __name__ == '__main__':
             'id,'
             'from,'
             'to,'
-            'timestamp,'
+            'created,'
             'amount',
             file=f
         )
